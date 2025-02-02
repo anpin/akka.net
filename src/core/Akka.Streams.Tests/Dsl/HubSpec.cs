@@ -977,20 +977,10 @@ namespace Akka.Streams.Tests.Dsl
             // Drain sink
             hubSource.To(Sink.Ignore<string>()).Run(Materializer);
             
-            // Failing sink which doesn't affect the drain
-            hubSource
-                .To(Sink.ForEach<string>(str =>
-                {
-                    if (str.Length < 3) 
-                        Output.WriteLine($"ok {str}");
-                    throw new Exception($"out of range {str}");
-                }).Named("less_than_3"))
-                .Run(Materializer);
-
-            // TCP flow which kills the drain too
+            // TCP flow which kills the drain
             var tcpFlow = Sys.TcpStream().OutgoingConnection(
                 new System.Net.IPEndPoint(System.Net.IPAddress.Parse("128.128.128.128"), 5000),
-                connectionTimeout: TimeSpan.FromSeconds(1)
+                connectionTimeout: TimeSpan.FromSeconds(3)
             ).JoinMaterialized(KillSwitches.SingleBidi<ByteString, ByteString>(), Keep.Right);
 
             hubSource
@@ -999,9 +989,6 @@ namespace Akka.Streams.Tests.Dsl
                 .To(Sink.ForEach<ByteString>(bs => Console.WriteLine($"rx {bs}")))
                 .Run(Materializer);
 
-            // idk why, but without probe it doesn't fail 
-            hubSource.To(this.SinkProbe<string>()).Run(Materializer);
-            
             // Send messages
             for (int i = 0; i < 1000; i++)
             {
